@@ -1,0 +1,6 @@
+dimensions:
+  - id: dimension.city_code
+    display_name: 城市
+    table: trip_orders
+    column: city_code
+    enabled: true

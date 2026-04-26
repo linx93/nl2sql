@@ -1,0 +1,5 @@
+id: ride_hailing
+display_name: 网约车订单域
+datasource_id: ride_hailing_ro
+default_timezone: Asia/Shanghai
+enabled: true

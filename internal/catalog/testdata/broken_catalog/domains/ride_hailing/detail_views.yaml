@@ -1,0 +1,18 @@
+detail_views:
+  - id: detail.waiting_pickup_orders
+    display_name: 待接驾订单明细
+    base_table: trip_orders
+    allowed_select_columns:
+      - trip_orders.order_id
+    allowed_filter_fields:
+      - trip_orders.city_code
+    required_time_field: trip_orders.order_id
+    default_sort:
+      field: trip_orders.order_id
+      direction: desc
+    max_limit: 50
+    max_time_range_days: 30
+    require_narrowing_filter: true
+    row_policy_key: city_scope
+    masked_columns: []
+    enabled: true

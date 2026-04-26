@@ -1,0 +1,11 @@
+roles:
+  - id: analyst
+    display_name: 运营分析师
+    allowed_query_modes:
+      - aggregate_overview
+      - ranking
+      - trend
+      - detail_list
+    allowed_detail_view_ids:
+      - detail.waiting_pickup_orders
+    max_limit: 100

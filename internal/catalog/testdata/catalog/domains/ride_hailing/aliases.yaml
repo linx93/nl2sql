@@ -1,0 +1,6 @@
+metrics:
+  取消率: metric.cancel_rate
+dimensions:
+  城市: dimension.city_code
+detail_views:
+  待接驾订单: detail.waiting_pickup_orders

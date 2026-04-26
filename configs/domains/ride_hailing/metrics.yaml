@@ -1,0 +1,7 @@
+metrics:
+  - id: metric.cancel_rate
+    display_name: 取消率
+    base_table: trip_orders
+    sql_expression: SUM(CASE WHEN trip_orders.is_cancelled = 1 THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0)
+    time_field: called_at
+    enabled: true

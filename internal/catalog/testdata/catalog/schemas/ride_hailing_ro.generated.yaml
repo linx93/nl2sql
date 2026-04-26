@@ -1,0 +1,12 @@
+datasource_id: ride_hailing_ro
+database: ride_hailing
+tables:
+  - name: trip_orders
+    comment: 订单事实表
+    columns:
+      - name: order_id
+        data_type: varchar
+        comment: 订单号
+      - name: called_at
+        data_type: datetime
+        comment: 呼叫时间
