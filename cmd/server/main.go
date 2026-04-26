@@ -2,13 +2,14 @@ package main
 
 import (
 	"log"
-	"net/http"
 
 	internalserver "nl2sql/internal/server"
 )
 
 func main() {
-	if err := http.ListenAndServe(":8080", internalserver.NewMux("configs")); err != nil {
+	if _, err := internalserver.LoadAndValidateCatalog("configs"); err != nil {
 		log.Fatal(err)
 	}
+
+	log.Fatal("query service wiring is not configured; construct a real orchestrator service before starting the server")
 }

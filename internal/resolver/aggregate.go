@@ -9,7 +9,7 @@ import (
 )
 
 // ResolveAggregate 将原始聚合计划解析为可执行的规范化计划。
-func ResolveAggregate(raw domain.RawPlan, cat catalog.Catalog, role catalog.RolePolicy, _ pkgclock.Clock) (domain.ResolvedPlan, error) {
+func ResolveAggregate(raw domain.RawPlan, cat catalog.Catalog, role catalog.RolePolicy, clk pkgclock.Clock) (domain.ResolvedPlan, error) {
 	domainSpec, aliases, err := primaryDomain(cat)
 	if err != nil {
 		return domain.ResolvedPlan{}, err
@@ -17,6 +17,9 @@ func ResolveAggregate(raw domain.RawPlan, cat catalog.Catalog, role catalog.Role
 
 	queryMode, err := normalizeAggregateMode(raw.QueryMode)
 	if err != nil {
+		return domain.ResolvedPlan{}, err
+	}
+	if err := ensureRoleAllowsQueryMode(role, queryMode); err != nil {
 		return domain.ResolvedPlan{}, err
 	}
 
@@ -28,11 +31,23 @@ func ResolveAggregate(raw domain.RawPlan, cat catalog.Catalog, role catalog.Role
 	if err != nil {
 		return domain.ResolvedPlan{}, err
 	}
+	timeRange, err := resolveTimeRange(raw.TimeRange, clk)
+	if err != nil {
+		return domain.ResolvedPlan{}, err
+	}
+	if queryMode == domain.QueryModeTrend {
+		grain, err := normalizeTrendGrain(raw.TimeRange.Grain)
+		if err != nil {
+			return domain.ResolvedPlan{}, err
+		}
+		timeRange.Grain = grain
+	}
 
 	return domain.ResolvedPlan{
 		QueryMode:    queryMode,
 		MetricIDs:    metricIDs,
 		DimensionIDs: dimensionIDs,
+		TimeRange:    timeRange,
 		Limit:        clampLimit(raw.Limit, role.MaxLimit),
 		DatasourceID: domainSpec.DatasourceID,
 	}, nil
@@ -99,5 +114,28 @@ func clampLimit(requested int, maxLimit int) int {
 		return maxLimit
 	default:
 		return requested
+	}
+}
+
+func ensureRoleAllowsQueryMode(role catalog.RolePolicy, queryMode domain.QueryMode) error {
+	for _, allowedMode := range role.AllowedQueryModes {
+		if allowedMode == string(queryMode) {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("query mode not allowed: %s", queryMode)
+}
+
+func normalizeTrendGrain(raw string) (string, error) {
+	switch raw {
+	case "", "day":
+		return "day", nil
+	case "week":
+		return "week", nil
+	case "month":
+		return "month", nil
+	default:
+		return "", fmt.Errorf("unsupported trend grain %s", raw)
 	}
 }

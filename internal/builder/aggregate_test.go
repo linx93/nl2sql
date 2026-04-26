@@ -28,6 +28,51 @@ func TestBuildAggregateRankingCancelRateByCity(t *testing.T) {
 	}
 }
 
+func TestBuildAggregateOverviewDoesNotRequireDimension(t *testing.T) {
+	plan := domain.ResolvedPlan{
+		QueryMode: domain.QueryModeAggregateOverview,
+		MetricIDs: []string{"metric.cancel_rate"},
+		TimeRange: domain.TimeRange{
+			Start: time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC),
+			End:   time.Date(2026, 4, 30, 23, 59, 59, 0, time.UTC),
+		},
+		DatasourceID: "ride_hailing_ro",
+	}
+
+	result, err := BuildAggregate(plan, loadCatalogFixture(t))
+	if err != nil {
+		t.Fatalf("BuildAggregate returned error: %v", err)
+	}
+	if contains(result.SQL, "GROUP BY") {
+		t.Fatalf("expected overview SQL without GROUP BY, got %q", result.SQL)
+	}
+}
+
+func TestBuildAggregateTrendUsesTimeBucket(t *testing.T) {
+	plan := domain.ResolvedPlan{
+		QueryMode: domain.QueryModeTrend,
+		MetricIDs: []string{"metric.cancel_rate"},
+		TimeRange: domain.TimeRange{
+			Start: time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC),
+			End:   time.Date(2026, 4, 30, 23, 59, 59, 0, time.UTC),
+			Grain: "day",
+		},
+		Limit:        31,
+		DatasourceID: "ride_hailing_ro",
+	}
+
+	result, err := BuildAggregate(plan, loadCatalogFixture(t))
+	if err != nil {
+		t.Fatalf("BuildAggregate returned error: %v", err)
+	}
+	if !contains(result.SQL, "trend_bucket") {
+		t.Fatalf("expected trend bucket alias in SQL, got %q", result.SQL)
+	}
+	if !contains(result.SQL, "GROUP BY trend_bucket") {
+		t.Fatalf("expected trend grouping in SQL, got %q", result.SQL)
+	}
+}
+
 func loadResolvedRankingPlanFixture() domain.ResolvedPlan {
 	return domain.ResolvedPlan{
 		QueryMode:    domain.QueryModeRanking,

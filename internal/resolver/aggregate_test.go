@@ -35,6 +35,47 @@ func TestResolveAggregateRankingMapsAliasesAndClampsLimit(t *testing.T) {
 	}
 }
 
+func TestResolveAggregateAppliesDefaultTimeRange(t *testing.T) {
+	raw := domain.RawPlan{
+		QueryMode:  "aggregate_overview",
+		Metrics:    []string{"取消率"},
+		Dimensions: nil,
+	}
+
+	plan, err := ResolveAggregate(raw, loadCatalogFixture(t), loadRoleFixture(t), fixedClock())
+	if err != nil {
+		t.Fatalf("ResolveAggregate returned error: %v", err)
+	}
+
+	wantStart := time.Date(2026, 3, 29, 10, 0, 0, 0, time.FixedZone("CST", 8*60*60))
+	wantEnd := time.Date(2026, 4, 27, 10, 0, 0, 0, time.FixedZone("CST", 8*60*60))
+	if !plan.TimeRange.Start.Equal(wantStart) {
+		t.Fatalf("expected default start %v, got %v", wantStart, plan.TimeRange.Start)
+	}
+	if !plan.TimeRange.End.Equal(wantEnd) {
+		t.Fatalf("expected default end %v, got %v", wantEnd, plan.TimeRange.End)
+	}
+}
+
+func TestResolveAggregateRejectsQueryModeOutsideRolePolicy(t *testing.T) {
+	role := loadRoleFixture(t)
+	role.AllowedQueryModes = []string{"aggregate_overview"}
+
+	raw := domain.RawPlan{
+		QueryMode:  "ranking",
+		Metrics:    []string{"取消率"},
+		Dimensions: []string{"城市"},
+	}
+
+	_, err := ResolveAggregate(raw, loadCatalogFixture(t), role, fixedClock())
+	if err == nil {
+		t.Fatalf("expected permission error")
+	}
+	if err.Error() != "query mode not allowed: ranking" {
+		t.Fatalf("expected query mode rejection, got %q", err.Error())
+	}
+}
+
 func loadCatalogFixture(t *testing.T) catalog.Catalog {
 	t.Helper()
 

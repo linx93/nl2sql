@@ -35,7 +35,7 @@ func TestExecutorRunsReadonlyQueryAgainstMySQL(t *testing.T) {
 	defer env.Terminate(t)
 
 	exec := executor.NewMySQLExecutor(env.DB)
-	result, err := exec.Query(context.Background(), "SELECT 1 AS value", nil)
+	result, err := exec.Query(context.Background(), "ride_hailing_ro", "SELECT 1 AS value", nil)
 	if err != nil {
 		t.Fatalf("Query returned error: %v", err)
 	}

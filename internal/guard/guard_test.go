@@ -20,6 +20,29 @@ func TestGuardRejectsDetailQueryWithoutAllowedColumns(t *testing.T) {
 	}
 }
 
+func TestGuardRejectsUnsafeDetailFilterOperator(t *testing.T) {
+	input := loadGuardInputWithSensitiveColumnFixture()
+	input.BuildResult.ReferencedCols = []string{
+		"trip_orders.order_id",
+		"trip_orders.called_at",
+	}
+	input.Plan.Filters = []domain.ResolvedFilter{
+		{
+			FieldID:  "trip_orders.city_code",
+			Operator: "OR 1=1 --",
+			Value:    "310000",
+		},
+	}
+
+	_, err := Validate(input)
+	if err == nil {
+		t.Fatalf("expected validation error")
+	}
+	if err.Error() != "filter operator not allowed: OR 1=1 --" {
+		t.Fatalf("expected unsafe operator rejection, got %q", err.Error())
+	}
+}
+
 func loadGuardInputWithSensitiveColumnFixture() GuardInput {
 	return GuardInput{
 		Plan: domain.ResolvedPlan{

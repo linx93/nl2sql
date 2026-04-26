@@ -2,6 +2,7 @@ package resolver
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"nl2sql/internal/catalog"
@@ -17,6 +18,9 @@ func ResolveDetail(raw domain.RawPlan, cat catalog.Catalog, role catalog.RolePol
 	}
 	if raw.QueryMode != string(domain.QueryModeDetailList) {
 		return domain.ResolvedPlan{}, fmt.Errorf("unsupported query mode %s", raw.QueryMode)
+	}
+	if err := ensureRoleAllowsQueryMode(role, domain.QueryModeDetailList); err != nil {
+		return domain.ResolvedPlan{}, err
 	}
 
 	detailViewID, ok := aliases.DetailViews[raw.DetailSubject]
@@ -40,12 +44,16 @@ func ResolveDetail(raw domain.RawPlan, cat catalog.Catalog, role catalog.RolePol
 	if err != nil {
 		return domain.ResolvedPlan{}, err
 	}
+	filters, err := resolveFilters(raw.Filters, detailView.AllowedFilterFields)
+	if err != nil {
+		return domain.ResolvedPlan{}, err
+	}
 
 	return domain.ResolvedPlan{
 		QueryMode:       domain.QueryModeDetailList,
 		DetailViewID:    detailViewID,
 		SelectColumnIDs: defaultSelectColumns(detailView, raw.SelectFields),
-		Filters:         resolveFilters(raw.Filters),
+		Filters:         filters,
 		TimeRange:       timeRange,
 		Limit:           clampLimit(raw.Limit, effectiveDetailLimit(role.MaxLimit, detailView.MaxLimit)),
 		DatasourceID:    domainSpec.DatasourceID,
@@ -70,17 +78,26 @@ func defaultSelectColumns(detailView catalog.DetailViewSpec, requested []string)
 	return append([]string(nil), detailView.DefaultSelectColumns...)
 }
 
-func resolveFilters(filters []domain.RawFilter) []domain.ResolvedFilter {
+func resolveFilters(filters []domain.RawFilter, allowedFields []string) ([]domain.ResolvedFilter, error) {
 	resolved := make([]domain.ResolvedFilter, 0, len(filters))
+	fieldIndex := buildAllowedFieldIndex(allowedFields)
 	for _, filter := range filters {
+		fieldID, err := resolveAllowedFieldID(fieldIndex, filter.Field)
+		if err != nil {
+			return nil, err
+		}
+		operator, err := normalizeFilterOperator(filter.Operator)
+		if err != nil {
+			return nil, err
+		}
 		resolved = append(resolved, domain.ResolvedFilter{
-			FieldID:  filter.Field,
-			Operator: filter.Operator,
+			FieldID:  fieldID,
+			Operator: operator,
 			Value:    filter.Value,
 		})
 	}
 
-	return resolved
+	return resolved, nil
 }
 
 func effectiveDetailLimit(roleMaxLimit int, detailMaxLimit int) int {
@@ -99,9 +116,16 @@ func effectiveDetailLimit(roleMaxLimit int, detailMaxLimit int) int {
 func resolveTimeRange(raw domain.RawTimeRange, clk pkgclock.Clock) (domain.TimeRange, error) {
 	switch raw.Type {
 	case "", "relative":
-		return resolveRelativeTimeRange(raw.Value, clk), nil
+		result := resolveRelativeTimeRange(raw.Value, clk)
+		result.Grain = raw.Grain
+		return result, nil
 	case "absolute":
-		return resolveAbsoluteTimeRange(raw.Start, raw.End)
+		result, err := resolveAbsoluteTimeRange(raw.Start, raw.End)
+		if err != nil {
+			return domain.TimeRange{}, err
+		}
+		result.Grain = raw.Grain
+		return result, nil
 	default:
 		return domain.TimeRange{}, fmt.Errorf("unsupported time range type %s", raw.Type)
 	}
@@ -144,4 +168,62 @@ func resolveAbsoluteTimeRange(start string, end string) (domain.TimeRange, error
 		Start: startAt,
 		End:   endAt,
 	}, nil
+}
+
+func buildAllowedFieldIndex(allowedFields []string) map[string]string {
+	index := make(map[string]string, len(allowedFields)*2)
+	shortFieldOwners := make(map[string]string, len(allowedFields))
+	ambiguousShortFields := make(map[string]struct{})
+
+	for _, field := range allowedFields {
+		index[field] = field
+		_, shortField, ok := strings.Cut(field, ".")
+		if !ok {
+			continue
+		}
+
+		if existingOwner, exists := shortFieldOwners[shortField]; exists && existingOwner != field {
+			delete(index, shortField)
+			ambiguousShortFields[shortField] = struct{}{}
+			continue
+		}
+		if _, ambiguous := ambiguousShortFields[shortField]; ambiguous {
+			continue
+		}
+
+		shortFieldOwners[shortField] = field
+		index[shortField] = field
+	}
+
+	return index
+}
+
+func resolveAllowedFieldID(index map[string]string, rawField string) (string, error) {
+	fieldID, ok := index[rawField]
+	if !ok {
+		return "", fmt.Errorf("filter field not allowed: %s", rawField)
+	}
+
+	return fieldID, nil
+}
+
+func normalizeFilterOperator(raw string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "eq", "=":
+		return "=", nil
+	case "ne", "!=":
+		return "!=", nil
+	case "gt", ">":
+		return ">", nil
+	case "gte", ">=":
+		return ">=", nil
+	case "lt", "<":
+		return "<", nil
+	case "lte", "<=":
+		return "<=", nil
+	case "like":
+		return "LIKE", nil
+	default:
+		return "", fmt.Errorf("filter operator not allowed: %s", raw)
+	}
 }

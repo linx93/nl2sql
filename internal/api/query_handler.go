@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"nl2sql/internal/orchestrator"
@@ -60,10 +61,20 @@ func (h *Handler) handlePostQueries(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp, err := h.service.Run(r.Context(), orchestrator.QueryRequest{
-		Query:  body.Query,
-		Domain: body.Domain,
+		Query:    body.Query,
+		Domain:   body.Domain,
+		UserID:   r.Header.Get("X-User-ID"),
+		UserRole: r.Header.Get("X-User-Role"),
 	})
 	if err != nil {
+		if errors.Is(err, orchestrator.ErrPermissionDenied) {
+			writeError(w, http.StatusForbidden, "PERMISSION_DENIED", "当前用户没有执行该查询的权限")
+			return
+		}
+		if errors.Is(err, orchestrator.ErrUnsupportedDomain) {
+			writeError(w, http.StatusBadRequest, "UNSUPPORTED_DOMAIN", "请求中的业务域不存在或不可用")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "查询执行失败")
 		return
 	}

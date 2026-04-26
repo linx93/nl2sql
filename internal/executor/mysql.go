@@ -19,8 +19,8 @@ func NewMySQLExecutor(db *sql.DB) MySQLExecutor {
 	return MySQLExecutor{db: db}
 }
 
-// Query 执行参数化 SQL，并将结果扫描为结构化列和行。
-func (e MySQLExecutor) Query(ctx context.Context, query string, args []any) (formatter.QueryResult, error) {
+// Query 在指定 datasource_id 下执行参数化 SQL，并将结果扫描为结构化列和行。
+func (e MySQLExecutor) Query(ctx context.Context, _ string, query string, args []any) (formatter.QueryResult, error) {
 	rows, err := e.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return formatter.QueryResult{}, err

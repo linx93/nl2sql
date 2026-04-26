@@ -31,6 +31,9 @@ func Validate(input GuardInput) (builder.BuildResult, error) {
 		if err := validateDetailColumns(input.DetailView, input.BuildResult.ReferencedCols); err != nil {
 			return builder.BuildResult{}, err
 		}
+		if err := validateDetailFilterOperators(input.Plan.Filters); err != nil {
+			return builder.BuildResult{}, err
+		}
 		if err := validateDetailLimit(input.DetailView, input.RolePolicy, input.BuildResult.Limit); err != nil {
 			return builder.BuildResult{}, err
 		}
@@ -60,6 +63,26 @@ func validateDetailColumns(detailView catalog.DetailViewSpec, referencedCols []s
 	for _, column := range referencedCols {
 		if _, ok := allowed[column]; !ok {
 			return fmt.Errorf("column not allowed: %s", column)
+		}
+	}
+
+	return nil
+}
+
+func validateDetailFilterOperators(filters []domain.ResolvedFilter) error {
+	allowed := map[string]struct{}{
+		"=":    {},
+		"!=":   {},
+		">":    {},
+		">=":   {},
+		"<":    {},
+		"<=":   {},
+		"LIKE": {},
+	}
+
+	for _, filter := range filters {
+		if _, ok := allowed[strings.ToUpper(strings.TrimSpace(filter.Operator))]; !ok {
+			return fmt.Errorf("filter operator not allowed: %s", filter.Operator)
 		}
 	}
 
