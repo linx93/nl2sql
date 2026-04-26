@@ -40,6 +40,7 @@ Date: 2026-04-27
 - Domain rules must not drift into transport, persistence, or infrastructure layers.
 - The repository must provide a pre-commit hook that runs required tests before each commit.
 - The repository must block commits when tests fail or when encoding checks detect obvious Chinese garbling.
+- Git commit messages must use Chinese and clearly describe the change intent.
 - Source code, config, SQL, Markdown, and hook files must use UTF-8 encoding.
 - Key business code, structs, interfaces, methods, functions, variables, constants, and fields must include detailed Chinese comments.
 - Database SQL files must include Chinese comments for create, update, query, delete, migration, rollback, seed, and maintenance statements.

@@ -129,6 +129,13 @@ TDD and DDD are both mandatory for production behavior. Domain models and domain
 - Commits must not bypass the hook unless there is explicit approval for an exceptional emergency case.
 - Hook logic must be versioned in the repository instead of relying only on undocumented local machine setup.
 
+## Git Commit Rules
+
+- Git commit messages in this repository must use Chinese.
+- Commit messages should clearly describe the intent of the change, not just repeat filenames.
+- Prefer concise Chinese summaries in conventional formats such as `功能: ...`、`修复: ...`、`文档: ...`、`重构: ...`、`测试: ...`、`初始化: ...`.
+- Do not mix English-only commit subjects into normal project history unless there is explicit approval.
+
 ## Encoding and Chinese Text Rules
 
 - All source code, config, SQL, Markdown, and hook files must use UTF-8 encoding.
