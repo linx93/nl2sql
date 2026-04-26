@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+go test ./...
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-encoding.ps1
