@@ -1,4 +1,4 @@
-# NL2SQL Design
+﻿# NL2SQL Design
 
 Date: 2026-04-27
 Status: Approved for implementation planning
@@ -123,10 +123,10 @@ Example:
 
 ```yaml
 datasources:
-  - id: ecommerce_ro
+  - id: ride_hailing_ro
     driver: mysql
-    dsn_env: MYSQL_ECOMMERCE_RO_DSN
-    database: ecommerce
+    dsn_env: MYSQL_RIDE_HAILING_RO_DSN
+    database: ride_hailing
     max_open_conns: 20
     max_idle_conns: 10
     conn_max_lifetime_sec: 1800
@@ -137,9 +137,9 @@ datasources:
 Each business domain binds to exactly one datasource:
 
 ```yaml
-id: ecommerce
-display_name: 电商订单域
-datasource_id: ecommerce_ro
+id: ride_hailing
+display_name: 网约车订单域
+datasource_id: ride_hailing_ro
 default_timezone: Asia/Shanghai
 enabled: true
 ```
@@ -324,37 +324,37 @@ Not supported:
 ### 13.1 DetailViewSpec example
 
 ```yaml
-id: detail.unshipped_orders
-display_name: 未发货订单明细
-base_table: orders
+id: detail.waiting_pickup_orders
+display_name: 待接驾订单明细
+base_table: trip_orders
 allowed_joins:
-  - channels
+  - drivers
 default_select_columns:
-  - orders.order_id
-  - orders.region_code
-  - orders.pay_status
-  - orders.ship_status
-  - orders.paid_at
+  - trip_orders.order_id
+  - trip_orders.city_code
+  - trip_orders.service_type
+  - trip_orders.order_status
+  - trip_orders.called_at
 allowed_select_columns:
-  - orders.order_id
-  - orders.region_code
-  - orders.pay_status
-  - orders.ship_status
-  - orders.paid_at
-  - channels.channel_name
+  - trip_orders.order_id
+  - trip_orders.city_code
+  - trip_orders.service_type
+  - trip_orders.order_status
+  - trip_orders.called_at
+  - drivers.driver_name
 allowed_filter_fields:
-  - orders.region_code
-  - orders.pay_status
-  - orders.ship_status
-  - channels.channel_name
-required_time_field: orders.paid_at
+  - trip_orders.city_code
+  - trip_orders.service_type
+  - trip_orders.order_status
+  - drivers.driver_name
+required_time_field: trip_orders.called_at
 default_sort:
-  field: orders.paid_at
+  field: trip_orders.called_at
   direction: desc
 max_limit: 50
 max_time_range_days: 30
 require_narrowing_filter: true
-row_policy_key: region_scope
+row_policy_key: city_scope
 masked_columns: []
 enabled: true
 ```
@@ -617,7 +617,7 @@ Recommended order:
 
 1. datasource config + schema pull
 2. catalog loader + validation
-3. minimal ecommerce domain config
+3. minimal ride_hailing domain config
 4. resolver
 5. aggregate builder
 6. detail builder
@@ -646,3 +646,4 @@ The approved v1 design is:
 - TDD is a delivery requirement, not a nice-to-have
 
 This gives the project a realistic path to a controlled internal NL2SQL service without turning v1 into a federated query engine or a free-form database browser.
+

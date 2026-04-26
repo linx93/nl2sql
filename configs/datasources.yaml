@@ -1,9 +1,10 @@
-datasources:
-  - id: ecommerce_ro
+﻿datasources:
+  - id: ride_hailing_ro
     driver: mysql
-    dsn_env: MYSQL_ECOMMERCE_RO_DSN
-    database: ecommerce
+    dsn_env: MYSQL_RIDE_HAILING_RO_DSN
+    database: ride_hailing
     max_open_conns: 20
     max_idle_conns: 10
     conn_max_lifetime_sec: 1800
+
 

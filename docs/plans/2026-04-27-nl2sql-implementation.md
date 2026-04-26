@@ -1,4 +1,4 @@
-# NL2SQL Implementation Plan
+﻿# NL2SQL Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
@@ -16,7 +16,7 @@
 - Create: `go.mod`
 - Create: `.gitignore`
 - Create: `configs/datasources.yaml`
-- Create: `configs/domains/ecommerce/domain.yaml`
+- Create: `configs/domains/ride_hailing/domain.yaml`
 - Create: `internal/config/types.go`
 - Create: `internal/config/loader.go`
 - Test: `internal/config/loader_test.go`
@@ -27,8 +27,8 @@
 func TestLoadConfigReadsDatasourcesAndDomainRouting(t *testing.T) {
 	cfg, err := LoadFromDir("testdata/basic")
 	require.NoError(t, err)
-	require.Equal(t, "ecommerce_ro", cfg.Domains["ecommerce"].DatasourceID)
-	require.Equal(t, "mysql", cfg.Datasources["ecommerce_ro"].Driver)
+	require.Equal(t, "ride_hailing_ro", cfg.Domains["ride_hailing"].DatasourceID)
+	require.Equal(t, "mysql", cfg.Datasources["ride_hailing_ro"].Driver)
 }
 ```
 
@@ -63,14 +63,14 @@ Expected: `PASS`
 **Step 5: Commit**
 
 ```bash
-git add go.mod .gitignore configs/datasources.yaml configs/domains/ecommerce/domain.yaml internal/config/types.go internal/config/loader.go internal/config/loader_test.go
+git add go.mod .gitignore configs/datasources.yaml configs/domains/ride_hailing/domain.yaml internal/config/types.go internal/config/loader.go internal/config/loader_test.go
 git commit -m "feat: add runtime config loader"
 ```
 
 ### Task 2: Add Generated Schema Catalog Loader
 
 **Files:**
-- Create: `configs/schemas/ecommerce_ro.generated.yaml`
+- Create: `configs/schemas/ride_hailing_ro.generated.yaml`
 - Create: `internal/catalog/types.go`
 - Create: `internal/catalog/loader.go`
 - Test: `internal/catalog/loader_test.go`
@@ -81,8 +81,8 @@ git commit -m "feat: add runtime config loader"
 func TestCatalogLoaderBuildsTableAndColumnIndex(t *testing.T) {
 	catalog, err := Load("testdata/catalog")
 	require.NoError(t, err)
-	require.Contains(t, catalog.TablesByName, "orders")
-	require.Contains(t, catalog.ColumnsByTable["orders"], "paid_at")
+	require.Contains(t, catalog.TablesByName, "trip_orders")
+	require.Contains(t, catalog.ColumnsByTable["trip_orders"], "called_at")
 }
 ```
 
@@ -115,18 +115,18 @@ Expected: `PASS`
 **Step 5: Commit**
 
 ```bash
-git add configs/schemas/ecommerce_ro.generated.yaml internal/catalog/types.go internal/catalog/loader.go internal/catalog/loader_test.go
+git add configs/schemas/ride_hailing_ro.generated.yaml internal/catalog/types.go internal/catalog/loader.go internal/catalog/loader_test.go
 git commit -m "feat: load generated schema catalog"
 ```
 
 ### Task 3: Validate Semantic Domain Config Against Schema
 
 **Files:**
-- Create: `configs/domains/ecommerce/dimensions.yaml`
-- Create: `configs/domains/ecommerce/metrics.yaml`
-- Create: `configs/domains/ecommerce/detail_views.yaml`
-- Create: `configs/domains/ecommerce/roles.yaml`
-- Create: `configs/domains/ecommerce/aliases.yaml`
+- Create: `configs/domains/ride_hailing/dimensions.yaml`
+- Create: `configs/domains/ride_hailing/metrics.yaml`
+- Create: `configs/domains/ride_hailing/detail_views.yaml`
+- Create: `configs/domains/ride_hailing/roles.yaml`
+- Create: `configs/domains/ride_hailing/aliases.yaml`
 - Create: `internal/catalog/validate.go`
 - Test: `internal/catalog/validate_test.go`
 
@@ -167,7 +167,7 @@ Expected: `PASS`
 **Step 5: Commit**
 
 ```bash
-git add configs/domains/ecommerce/dimensions.yaml configs/domains/ecommerce/metrics.yaml configs/domains/ecommerce/detail_views.yaml configs/domains/ecommerce/roles.yaml configs/domains/ecommerce/aliases.yaml internal/catalog/validate.go internal/catalog/validate_test.go
+git add configs/domains/ride_hailing/dimensions.yaml configs/domains/ride_hailing/metrics.yaml configs/domains/ride_hailing/detail_views.yaml configs/domains/ride_hailing/roles.yaml configs/domains/ride_hailing/aliases.yaml internal/catalog/validate.go internal/catalog/validate_test.go
 git commit -m "feat: validate semantic config against schema"
 ```
 
@@ -182,8 +182,8 @@ git commit -m "feat: validate semantic config against schema"
 ```go
 func TestDatasourceRegistryReturnsPoolByDomain(t *testing.T) {
 	registry := NewRegistry()
-	registry.Register("ecommerce_ro", &sql.DB{})
-	db, err := registry.ForDomain("ecommerce", loadDomainMapFixture())
+	registry.Register("ride_hailing_ro", &sql.DB{})
+	db, err := registry.ForDomain("ride_hailing", loadDomainMapFixture())
 	require.NoError(t, err)
 	require.NotNil(t, db)
 }
@@ -274,13 +274,13 @@ git commit -m "feat: add query plan domain types"
 func TestResolveAggregateRankingMapsAliasesAndClampsLimit(t *testing.T) {
 	raw := domain.RawPlan{
 		QueryMode: "ranking",
-		Metrics:   []string{"退款率"},
-		Dimensions: []string{"商品"},
+		Metrics:   []string{"取消率"},
+		Dimensions: []string{"城市"},
 		Limit:     500,
 	}
 	plan, err := ResolveAggregate(raw, loadCatalogFixture(t), loadRoleFixture(t), fixedClock())
 	require.NoError(t, err)
-	require.Equal(t, []string{"metric.refund_rate"}, plan.MetricIDs)
+	require.Equal(t, []string{"metric.cancel_rate"}, plan.MetricIDs)
 	require.Equal(t, 100, plan.Limit)
 }
 ```
@@ -296,8 +296,8 @@ Expected: `FAIL` because aggregate resolution does not exist.
 func ResolveAggregate(raw domain.RawPlan, catalog Catalog, role RolePolicy, clk clock.Clock) (domain.ResolvedPlan, error) {
 	return domain.ResolvedPlan{
 		QueryMode:    domain.QueryModeRanking,
-		MetricIDs:    []string{"metric.refund_rate"},
-		DimensionIDs: []string{"dimension.product_name"},
+		MetricIDs:    []string{"metric.cancel_rate"},
+		DimensionIDs: []string{"dimension.city_name"},
 		Limit:        min(raw.Limit, role.MaxLimit),
 		DatasourceID: catalog.Domain.DatasourceID,
 	}, nil
@@ -330,7 +330,7 @@ git commit -m "feat: resolve aggregate query plans"
 func TestResolveDetailMapsSubjectToDetailViewAndRequiresNarrowingFilter(t *testing.T) {
 	raw := domain.RawPlan{
 		QueryMode:     "detail_list",
-		DetailSubject: "未发货订单",
+		DetailSubject: "待接驾订单",
 		TimeRange:     domain.RawTimeRange{Type: "relative", Value: "last_7_days"},
 	}
 	_, err := ResolveDetail(raw, loadCatalogFixture(t), loadRoleFixture(t), fixedClock())
@@ -351,7 +351,7 @@ func ResolveDetail(raw domain.RawPlan, catalog Catalog, role RolePolicy, clk clo
 }
 ```
 
-Then make the test pass by resolving the subject to `detail.unshipped_orders` and enforcing required detail rules.
+Then make the test pass by resolving the subject to `detail.waiting_pickup_orders` and enforcing required detail rules.
 
 **Step 4: Run test to verify it passes**
 
@@ -375,7 +375,7 @@ git commit -m "feat: resolve detail query plans"
 **Step 1: Write the failing test**
 
 ```go
-func TestBuildAggregateRankingRefundRateByProduct(t *testing.T) {
+func TestBuildAggregateRankingCancelRateByCity(t *testing.T) {
 	plan := loadResolvedRankingPlanFixture(t)
 	result, err := BuildAggregate(plan, loadCatalogFixture(t))
 	require.NoError(t, err)
@@ -387,7 +387,7 @@ func TestBuildAggregateRankingRefundRateByProduct(t *testing.T) {
 
 **Step 2: Run test to verify it fails**
 
-Run: `go test ./internal/builder -run TestBuildAggregateRankingRefundRateByProduct -v`  
+Run: `go test ./internal/builder -run TestBuildAggregateRankingCancelRateByCity -v`  
 Expected: `FAIL` because aggregate SQL builder does not exist.
 
 **Step 3: Write minimal implementation**
@@ -395,7 +395,7 @@ Expected: `FAIL` because aggregate SQL builder does not exist.
 ```go
 func BuildAggregate(plan domain.ResolvedPlan, catalog Catalog) (BuildResult, error) {
 	return BuildResult{
-		SQL:  "SELECT p.product_name, SUM(...) AS refund_rate FROM ... GROUP BY p.product_name ORDER BY refund_rate DESC LIMIT ?",
+		SQL:  "SELECT trip_orders.city_code, SUM(...) AS cancel_rate FROM ... GROUP BY trip_orders.city_code ORDER BY cancel_rate DESC LIMIT ?",
 		Args: []any{plan.Limit},
 	}, nil
 }
@@ -405,7 +405,7 @@ Then replace placeholders with catalog-driven rendering.
 
 **Step 4: Run test to verify it passes**
 
-Run: `go test ./internal/builder -run TestBuildAggregateRankingRefundRateByProduct -v`  
+Run: `go test ./internal/builder -run TestBuildAggregateRankingCancelRateByCity -v`  
 Expected: `PASS`
 
 **Step 5: Commit**
@@ -429,7 +429,7 @@ func TestBuildDetailListUsesAllowedColumnsAndDefaultSort(t *testing.T) {
 	result, err := BuildDetail(plan, loadCatalogFixture(t))
 	require.NoError(t, err)
 	require.NotContains(t, result.SQL, "*")
-	require.Contains(t, result.SQL, "ORDER BY orders.paid_at DESC")
+	require.Contains(t, result.SQL, "ORDER BY trip_orders.called_at DESC")
 	require.Contains(t, result.SQL, "LIMIT ?")
 }
 ```
@@ -444,7 +444,7 @@ Expected: `FAIL` because detail SQL builder does not exist.
 ```go
 func BuildDetail(plan domain.ResolvedPlan, catalog Catalog) (BuildResult, error) {
 	return BuildResult{
-		SQL:  "SELECT orders.order_id, orders.paid_at FROM orders WHERE orders.paid_at BETWEEN ? AND ? ORDER BY orders.paid_at DESC LIMIT ?",
+		SQL:  "SELECT trip_orders.order_id, trip_orders.called_at FROM trip_orders WHERE trip_orders.called_at BETWEEN ? AND ? ORDER BY trip_orders.called_at DESC LIMIT ?",
 		Args: []any{plan.TimeRange.Start, plan.TimeRange.End, plan.Limit},
 	}, nil
 }
@@ -615,8 +615,8 @@ git commit -m "feat: add audit persistence"
 func TestOrchestratorRunsAggregateQueryEndToEnd(t *testing.T) {
 	svc := newServiceWithFakes(t)
 	resp, err := svc.Run(context.Background(), QueryRequest{
-		Query:  "最近30天退款率最高的前5个商品",
-		Domain: "ecommerce",
+		Query:  "最近30天取消率最高的前5个城市",
+		Domain: "ride_hailing",
 	})
 	require.NoError(t, err)
 	require.Equal(t, "ranking", resp.Meta.QueryMode)
@@ -716,7 +716,7 @@ git commit -m "feat: add mysql executor"
 
 ```go
 func TestPostQueriesReturnsSuccessPayload(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/nl2sql/queries", strings.NewReader(`{"query":"最近7天支付订单数","domain":"ecommerce"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/nl2sql/queries", strings.NewReader(`{"query":"最近7天完单数","domain":"ride_hailing"}`))
 	res := httptest.NewRecorder()
 	handler := newHandlerWithFakeService(t)
 	handler.ServeHTTP(res, req)
@@ -768,12 +768,12 @@ git commit -m "feat: add query API"
 
 ```go
 func TestPlannerSchemaRejectsMissingQueryMode(t *testing.T) {
-	err := ValidateRawPlanJSON([]byte(`{"metrics":["退款率"]}`))
+	err := ValidateRawPlanJSON([]byte(`{"metrics":["取消率"]}`))
 	require.ErrorContains(t, err, "query_mode")
 }
 
 func TestScaffoldDomainCreatesDisabledDimensionSpecsByDefault(t *testing.T) {
-	files := ScaffoldDomain(loadSchemaFixture(t), "ecommerce", []string{"orders"})
+	files := ScaffoldDomain(loadSchemaFixture(t), "ride_hailing", []string{"trip_orders"})
 	require.Contains(t, files["dimensions.yaml"], "enabled: false")
 }
 ```
@@ -918,3 +918,4 @@ git commit -m "docs: add verification checklist"
 - Use fake planner and fake executor for orchestrator tests.
 - Use testcontainers-go only for MySQL integration tests.
 - If a test passes on the first run, rewrite the test because it did not prove the behavior.
+
