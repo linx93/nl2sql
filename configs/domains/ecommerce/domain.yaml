@@ -1,0 +1,6 @@
+id: ecommerce
+display_name: 电商订单域
+datasource_id: ecommerce_ro
+default_timezone: Asia/Shanghai
+enabled: true
+

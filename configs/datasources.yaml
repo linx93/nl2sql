@@ -1,0 +1,9 @@
+datasources:
+  - id: ecommerce_ro
+    driver: mysql
+    dsn_env: MYSQL_ECOMMERCE_RO_DSN
+    database: ecommerce
+    max_open_conns: 20
+    max_idle_conns: 10
+    conn_max_lifetime_sec: 1800
+
