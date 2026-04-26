@@ -11,8 +11,8 @@ bin/
 dist/
 coverage/
 tmp/
+.worktrees/
 
 *.log
 *.out
 *.test
-
