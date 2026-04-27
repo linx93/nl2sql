@@ -36,7 +36,8 @@ Date: 2026-04-27
 - Production business logic must follow both TDD and DDD.
 - Pure logic should stay in resolver, builder, guard, and formatter packages.
 - External effects should stay at the edges: API, planner, executor, audit.
-- Real online LLM calls must not be part of the default CI gate.
+- For the approved MiniMax live E2E slice, default tests may call the live MiniMax planner.
+- Missing MiniMax live credentials must fail the default test run instead of skipping it.
 - Domain rules must not drift into transport, persistence, or infrastructure layers.
 - The repository must provide a pre-commit hook that runs required tests before each commit.
 - The repository must block commits when tests fail or when encoding checks detect obvious Chinese garbling.

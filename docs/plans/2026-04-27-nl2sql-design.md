@@ -576,8 +576,9 @@ Test layers:
 - datasource registry tests
 - MySQL integration tests for executor
 - end-to-end orchestration tests with fake planner
+- default live end-to-end tests with the MiniMax planner and MySQL for the approved live verification slice
 
-Real online LLM calls must not be part of the core CI gate.
+For the approved MiniMax live E2E slice, default `go test ./...` execution may call the live MiniMax planner and must fail when required live credentials are missing.
 
 ## 21. Tooling Workflow for Config Maintenance
 

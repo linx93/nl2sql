@@ -1,7 +1,7 @@
 # MiniMax Live E2E Design
 
 Date: 2026-04-27
-Status: Proposed and approved in-thread
+Status: Approved
 
 ## 1. Background
 
@@ -96,8 +96,8 @@ Bootstrap responsibilities:
 
 The seed dataset will be generated relative to runtime `now`, not frozen to a historical date. This is required because the default live planner tests use questions such as:
 
-- 最近7天
-- 最近30天
+- 最近 7 天
+- 最近 30 天
 - 每天趋势
 
 Without relative timestamps, the live planner tests would decay over time even if the code remained correct.
