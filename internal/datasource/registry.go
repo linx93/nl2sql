@@ -25,6 +25,16 @@ func (r *Registry) Register(datasourceID string, db *sql.DB) {
 	r.pools[datasourceID] = db
 }
 
+// ForDatasource 根据 datasource_id 返回已注册的只读连接池。
+func (r *Registry) ForDatasource(datasourceID string) (*sql.DB, error) {
+	db, ok := r.pools[datasourceID]
+	if !ok {
+		return nil, fmt.Errorf("datasource %s not registered", datasourceID)
+	}
+
+	return db, nil
+}
+
 // ForDomain 根据领域配置返回该领域唯一允许使用的数据源连接池。
 func (r *Registry) ForDomain(domainID string, domains map[string]config.DomainConfig) (*sql.DB, error) {
 	domain, ok := domains[domainID]
@@ -32,10 +42,5 @@ func (r *Registry) ForDomain(domainID string, domains map[string]config.DomainCo
 		return nil, fmt.Errorf("domain %s not found", domainID)
 	}
 
-	db, ok := r.pools[domain.DatasourceID]
-	if !ok {
-		return nil, fmt.Errorf("datasource %s not registered", domain.DatasourceID)
-	}
-
-	return db, nil
+	return r.ForDatasource(domain.DatasourceID)
 }
