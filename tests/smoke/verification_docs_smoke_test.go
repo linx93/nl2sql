@@ -17,3 +17,23 @@ func TestVerificationDocsMentionMiniMaxLiveDefault(t *testing.T) {
 	}
 }
 
+func TestVerificationDocsDescribeLiveMiniMaxRequirements(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "docs", "plans", "verification-checklist.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	content := string(raw)
+	if !strings.Contains(content, "MINIMAX_API_KEY") {
+		t.Fatalf("expected verification checklist to mention MINIMAX_API_KEY")
+	}
+	if !strings.Contains(content, "MYSQL_RIDE_HAILING_ROOT_DSN") {
+		t.Fatalf("expected verification checklist to mention MYSQL_RIDE_HAILING_ROOT_DSN")
+	}
+	if !strings.Contains(content, "MYSQL_RIDE_HAILING_RO_DSN") {
+		t.Fatalf("expected verification checklist to mention MYSQL_RIDE_HAILING_RO_DSN")
+	}
+	if !strings.Contains(content, "go test ./...") {
+		t.Fatalf("expected verification checklist to mention go test ./...")
+	}
+}

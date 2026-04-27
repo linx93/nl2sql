@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -58,6 +59,7 @@ func TestNewMiniMaxPlannerDefaultsToOfficialBaseURL(t *testing.T) {
 
 	require.Equal(t, "https://api.minimaxi.com", client.baseURL)
 	require.Equal(t, "MiniMax-M2.7", client.model)
+	require.Equal(t, 60*time.Second, client.httpClient.Timeout)
 }
 
 func TestMiniMaxPlannerReturnsUpstreamErrorBodyForNon2xxResponse(t *testing.T) {
@@ -78,6 +80,41 @@ func TestMiniMaxPlannerReturnsUpstreamErrorBodyForNon2xxResponse(t *testing.T) {
 	_, err := client.Plan(context.Background(), "最近30天取消率最高的城市", "ride_hailing")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "insufficient balance (1008)")
+}
+
+func TestMiniMaxPlannerRetriesOnceOnUpstreamServerError(t *testing.T) {
+	t.Parallel()
+
+	requestCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		if requestCount == 1 {
+			w.WriteHeader(http.StatusBadGateway)
+			_, _ = w.Write([]byte(`{"type":"error","error":{"type":"api_error","message":"temporary upstream error"}}`))
+			return
+		}
+
+		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			"content": []map[string]any{
+				{
+					"type": "text",
+					"text": `{"query_mode":"ranking","metrics":["取消率"],"dimensions":["城市"],"limit":10}`,
+				},
+			},
+		}))
+	}))
+	defer server.Close()
+
+	client := NewMiniMaxPlanner(MiniMaxConfig{
+		BaseURL: server.URL,
+		APIKey:  "test-key",
+		Model:   "MiniMax-M2.7",
+	})
+
+	plan, err := client.Plan(context.Background(), "最近30天取消率最高的城市", "ride_hailing")
+	require.NoError(t, err)
+	require.Equal(t, "ranking", plan.QueryMode)
+	require.Equal(t, 2, requestCount)
 }
 
 func TestMiniMaxPlannerParsesJSONWrappedInMarkdownFence(t *testing.T) {
@@ -125,4 +162,15 @@ func TestBuildMiniMaxSystemPromptDefinesRawPlanContractAndExamples(t *testing.T)
 	require.True(t, strings.Contains(prompt, "最近30天取消率最高的城市"))
 	require.True(t, strings.Contains(prompt, `"metrics":["取消率"]`))
 	require.True(t, strings.Contains(prompt, `"dimensions":["城市"]`))
+}
+
+func TestBuildMiniMaxSystemPromptIncludesDetailListExamples(t *testing.T) {
+	t.Parallel()
+
+	prompt := buildMiniMaxSystemPrompt()
+
+	require.True(t, strings.Contains(prompt, "最近7天上海待接驾订单明细"))
+	require.True(t, strings.Contains(prompt, "最近7天司机张三的待接驾订单明细"))
+	require.True(t, strings.Contains(prompt, `"detail_subject":"待接驾订单"`))
+	require.True(t, strings.Contains(prompt, `"select_fields":[]`))
 }

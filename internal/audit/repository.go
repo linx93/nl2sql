@@ -93,8 +93,8 @@ func BuildInsert(entry Entry) (string, []any) {
 		entry.Domain,
 		entry.DatasourceID,
 		entry.NaturalLanguageQuery,
-		entry.RawPlanJSON,
-		entry.ResolvedPlanJSON,
+		nullableJSON(entry.RawPlanJSON),
+		nullableJSON(entry.ResolvedPlanJSON),
 		entry.BuiltSQL,
 		entry.ValidatedSQL,
 		entry.QueryMode,
@@ -104,8 +104,8 @@ func BuildInsert(entry Entry) (string, []any) {
 		entry.ExecutionStatus,
 		entry.ErrorCode,
 		entry.ErrorMessageInternal,
-		entry.ResultColumnsJSON,
-		entry.ResultPreviewJSON,
+		nullableJSON(entry.ResultColumnsJSON),
+		nullableJSON(entry.ResultPreviewJSON),
 		entry.ResultRowCount,
 		entry.LatencyMS,
 		entry.LLMModel,
@@ -115,4 +115,12 @@ func BuildInsert(entry Entry) (string, []any) {
 	}
 
 	return query, args
+}
+
+func nullableJSON(raw string) any {
+	if raw == "" {
+		return nil
+	}
+
+	return raw
 }

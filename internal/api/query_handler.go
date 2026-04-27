@@ -23,17 +23,17 @@ type Handler struct {
 
 // queryRequestBody 表示 POST 请求体中的核心字段。
 type queryRequestBody struct {
-	Query string `json:"query"`
+	Query  string `json:"query"`
 	Domain string `json:"domain"`
 }
 
-// queryResponseBody 表示统一的成功响应结构。
+// queryResponseBody 表示统一的成功或失败响应结构。
 type queryResponseBody struct {
-	RequestID string                 `json:"request_id"`
-	Status    string                 `json:"status"`
-	Data      any                    `json:"data"`
-	Meta      map[string]any         `json:"meta"`
-	Error     map[string]string      `json:"error,omitempty"`
+	RequestID string            `json:"request_id"`
+	Status    string            `json:"status"`
+	Data      any               `json:"data"`
+	Meta      map[string]any    `json:"meta"`
+	Error     map[string]string `json:"error,omitempty"`
 }
 
 // NewHandler 创建一个 NL2SQL HTTP Handler。
@@ -69,6 +69,10 @@ func (h *Handler) handlePostQueries(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, orchestrator.ErrPermissionDenied) {
 			writeError(w, http.StatusForbidden, "PERMISSION_DENIED", "当前用户没有执行该查询的权限")
+			return
+		}
+		if errors.Is(err, orchestrator.ErrInvalidQuery) {
+			writeError(w, http.StatusBadRequest, "INVALID_QUERY", "该查询缺少可执行的收敛条件或超出当前受控范围")
 			return
 		}
 		if errors.Is(err, orchestrator.ErrUnsupportedDomain) {

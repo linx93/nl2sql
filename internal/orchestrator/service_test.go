@@ -106,6 +106,14 @@ func TestScopeCatalogToDomainKeepsOnlyRequestedDomain(t *testing.T) {
 	}
 }
 
+func TestNormalizeServiceErrorMapsNarrowingFilterFailureToInvalidQuery(t *testing.T) {
+	err := normalizeServiceError(errors.New("detail query requires narrowing filter"))
+
+	if !errors.Is(err, ErrInvalidQuery) {
+		t.Fatalf("expected invalid query error, got %v", err)
+	}
+}
+
 func newServiceWithFakes(t *testing.T) Service {
 	t.Helper()
 

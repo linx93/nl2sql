@@ -9,3 +9,11 @@ roles:
     allowed_detail_view_ids:
       - detail.waiting_pickup_orders
     max_limit: 100
+  - id: viewer
+    display_name: 只读观察者
+    allowed_query_modes:
+      - aggregate_overview
+      - ranking
+      - trend
+    allowed_detail_view_ids: []
+    max_limit: 50

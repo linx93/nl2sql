@@ -4,3 +4,8 @@ dimensions:
   城市: dimension.city_code
 detail_views:
   待接驾订单: detail.waiting_pickup_orders
+filter_values:
+  trip_orders.city_code:
+    上海: "310000"
+    北京: "110000"
+    广州: "440100"

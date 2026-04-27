@@ -23,6 +23,10 @@ detail_views:
       - trip_orders.order_status
       - drivers.driver_name
     required_time_field: trip_orders.called_at
+    preset_filters:
+      - field: trip_orders.order_status
+        operator: eq
+        value: waiting_pickup
     default_sort:
       field: trip_orders.called_at
       direction: desc

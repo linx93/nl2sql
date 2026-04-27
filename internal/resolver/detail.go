@@ -36,18 +36,22 @@ func ResolveDetail(raw domain.RawPlan, cat catalog.Catalog, role catalog.RolePol
 		return domain.ResolvedPlan{}, fmt.Errorf("permission denied for detail view %s", detailViewID)
 	}
 
-	if detailView.RequireNarrowingFilter && len(raw.Filters) == 0 {
-		return domain.ResolvedPlan{}, fmt.Errorf("detail query requires narrowing filter")
-	}
-
 	timeRange, err := resolveTimeRange(raw.TimeRange, clk)
 	if err != nil {
 		return domain.ResolvedPlan{}, err
 	}
-	filters, err := resolveFilters(raw.Filters, detailView.AllowedFilterFields)
+	userFilters, err := resolveFilters(raw.Filters, detailView.AllowedFilterFields, aliases, cat)
 	if err != nil {
 		return domain.ResolvedPlan{}, err
 	}
+	presetFilters, err := resolvePresetFilters(detailView.PresetFilters, detailView.AllowedFilterFields)
+	if err != nil {
+		return domain.ResolvedPlan{}, err
+	}
+	if detailView.RequireNarrowingFilter && !hasNarrowingFilter(userFilters, presetFilters) {
+		return domain.ResolvedPlan{}, fmt.Errorf("detail query requires narrowing filter")
+	}
+	filters := mergeResolvedFilters(userFilters, presetFilters)
 
 	return domain.ResolvedPlan{
 		QueryMode:       domain.QueryModeDetailList,
@@ -78,9 +82,31 @@ func defaultSelectColumns(detailView catalog.DetailViewSpec, requested []string)
 	return append([]string(nil), detailView.DefaultSelectColumns...)
 }
 
-func resolveFilters(filters []domain.RawFilter, allowedFields []string) ([]domain.ResolvedFilter, error) {
+func resolveFilters(filters []domain.RawFilter, allowedFields []string, aliases catalog.AliasSet, cat catalog.Catalog) ([]domain.ResolvedFilter, error) {
 	resolved := make([]domain.ResolvedFilter, 0, len(filters))
-	fieldIndex := buildAllowedFieldIndex(allowedFields)
+	fieldIndex := buildAllowedFieldIndex(allowedFields, aliases, cat)
+	for _, filter := range filters {
+		fieldID, err := resolveAllowedFieldID(fieldIndex, filter.Field)
+		if err != nil {
+			return nil, err
+		}
+		operator, err := normalizeFilterOperator(filter.Operator)
+		if err != nil {
+			return nil, err
+		}
+		resolved = append(resolved, domain.ResolvedFilter{
+			FieldID:  fieldID,
+			Operator: operator,
+			Value:    resolveFilterValue(fieldID, filter.Value, aliases),
+		})
+	}
+
+	return resolved, nil
+}
+
+func resolvePresetFilters(filters []catalog.FilterSpec, allowedFields []string) ([]domain.ResolvedFilter, error) {
+	resolved := make([]domain.ResolvedFilter, 0, len(filters))
+	fieldIndex := buildAllowedFieldIndex(allowedFields, catalog.AliasSet{}, catalog.Catalog{})
 	for _, filter := range filters {
 		fieldID, err := resolveAllowedFieldID(fieldIndex, filter.Field)
 		if err != nil {
@@ -98,6 +124,49 @@ func resolveFilters(filters []domain.RawFilter, allowedFields []string) ([]domai
 	}
 
 	return resolved, nil
+}
+
+func hasNarrowingFilter(userFilters []domain.ResolvedFilter, presetFilters []domain.ResolvedFilter) bool {
+	if len(userFilters) == 0 {
+		return false
+	}
+
+	presetIndex := make(map[string]struct{}, len(presetFilters))
+	for _, filter := range presetFilters {
+		presetIndex[resolvedFilterKey(filter)] = struct{}{}
+	}
+
+	for _, filter := range userFilters {
+		if _, ok := presetIndex[resolvedFilterKey(filter)]; ok {
+			continue
+		}
+
+		return true
+	}
+
+	return false
+}
+
+func mergeResolvedFilters(userFilters []domain.ResolvedFilter, presetFilters []domain.ResolvedFilter) []domain.ResolvedFilter {
+	merged := make([]domain.ResolvedFilter, 0, len(userFilters)+len(presetFilters))
+	seen := make(map[string]struct{}, len(userFilters)+len(presetFilters))
+
+	appendUnique := func(filters []domain.ResolvedFilter) {
+		for _, filter := range filters {
+			key := resolvedFilterKey(filter)
+			if _, ok := seen[key]; ok {
+				continue
+			}
+
+			merged = append(merged, filter)
+			seen[key] = struct{}{}
+		}
+	}
+
+	appendUnique(userFilters)
+	appendUnique(presetFilters)
+
+	return merged
 }
 
 func effectiveDetailLimit(roleMaxLimit int, detailMaxLimit int) int {
@@ -170,7 +239,7 @@ func resolveAbsoluteTimeRange(start string, end string) (domain.TimeRange, error
 	}, nil
 }
 
-func buildAllowedFieldIndex(allowedFields []string) map[string]string {
+func buildAllowedFieldIndex(allowedFields []string, aliases catalog.AliasSet, cat catalog.Catalog) map[string]string {
 	index := make(map[string]string, len(allowedFields)*2)
 	shortFieldOwners := make(map[string]string, len(allowedFields))
 	ambiguousShortFields := make(map[string]struct{})
@@ -195,7 +264,43 @@ func buildAllowedFieldIndex(allowedFields []string) map[string]string {
 		index[shortField] = field
 	}
 
+	for aliasName, dimensionID := range aliases.Dimensions {
+		dimension, ok := cat.Dimensions[dimensionID]
+		if !ok {
+			continue
+		}
+
+		fieldRef := dimension.Table + "." + dimension.Column
+		if _, ok := index[fieldRef]; !ok {
+			continue
+		}
+
+		index[aliasName] = fieldRef
+	}
+
 	return index
+}
+
+func resolveFilterValue(fieldID string, value any, aliases catalog.AliasSet) any {
+	rawValue, ok := value.(string)
+	if !ok {
+		return value
+	}
+
+	fieldAliases, ok := aliases.FilterValues[fieldID]
+	if !ok {
+		return value
+	}
+
+	if mappedValue, ok := fieldAliases[rawValue]; ok {
+		return mappedValue
+	}
+
+	return value
+}
+
+func resolvedFilterKey(filter domain.ResolvedFilter) string {
+	return fmt.Sprintf("%s|%s|%v", filter.FieldID, filter.Operator, filter.Value)
 }
 
 func resolveAllowedFieldID(index map[string]string, rawField string) (string, error) {

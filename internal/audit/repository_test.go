@@ -14,6 +14,34 @@ func TestAuditRepositoryBuildsInsertForResolvedPlanAndSQL(t *testing.T) {
 	}
 }
 
+func TestBuildInsertUsesNullForEmptyJSONColumns(t *testing.T) {
+	entry := Entry{
+		RequestID:       "req-001",
+		UserID:          "user-001",
+		UserRole:        "analyst",
+		Domain:          "ride_hailing",
+		DatasourceID:    "ride_hailing_ro",
+		QueryMode:       "aggregate_overview",
+		ResultKind:      "aggregate",
+		ExecutionStatus: "success",
+	}
+
+	_, args := BuildInsert(entry)
+
+	if args[6] != nil {
+		t.Fatalf("expected raw_plan_json arg to be nil, got %#v", args[6])
+	}
+	if args[7] != nil {
+		t.Fatalf("expected resolved_plan_json arg to be nil, got %#v", args[7])
+	}
+	if args[17] != nil {
+		t.Fatalf("expected result_columns_json arg to be nil, got %#v", args[17])
+	}
+	if args[18] != nil {
+		t.Fatalf("expected result_preview_json arg to be nil, got %#v", args[18])
+	}
+}
+
 func loadAuditEntryFixture() Entry {
 	return Entry{
 		RequestID:           "req-001",

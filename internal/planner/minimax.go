@@ -55,7 +55,7 @@ func NewMiniMaxPlanner(cfg MiniMaxConfig) MiniMaxPlanner {
 
 	httpClient := cfg.HTTPClient
 	if httpClient == nil {
-		httpClient = &http.Client{Timeout: 30 * time.Second}
+		httpClient = &http.Client{Timeout: 60 * time.Second}
 	}
 
 	return MiniMaxPlanner{
@@ -88,36 +88,42 @@ func (p MiniMaxPlanner) Plan(ctx context.Context, query string, domainID string)
 		return domain.RawPlan{}, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.baseURL+"/anthropic/v1/messages", bytes.NewReader(requestBody))
-	if err != nil {
-		return domain.RawPlan{}, err
-	}
-	req.Header.Set("Authorization", "Bearer "+p.apiKey)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := p.httpClient.Do(req)
-	if err != nil {
-		return domain.RawPlan{}, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		body, readErr := io.ReadAll(resp.Body)
-		if readErr != nil {
-			return domain.RawPlan{}, fmt.Errorf("minimax request failed: status %d", resp.StatusCode)
-		}
-
-		trimmedBody := strings.TrimSpace(string(body))
-		if trimmedBody == "" {
-			return domain.RawPlan{}, fmt.Errorf("minimax request failed: status %d", resp.StatusCode)
-		}
-
-		return domain.RawPlan{}, fmt.Errorf("minimax request failed: status %d: %s", resp.StatusCode, trimmedBody)
-	}
-
 	var payload miniMaxMessagesResponse
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return domain.RawPlan{}, err
+	var lastErr error
+	for attempt := 0; attempt < 2; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.baseURL+"/anthropic/v1/messages", bytes.NewReader(requestBody))
+		if err != nil {
+			return domain.RawPlan{}, err
+		}
+		req.Header.Set("Authorization", "Bearer "+p.apiKey)
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := p.httpClient.Do(req)
+		if err != nil {
+			lastErr = err
+			if attempt == 0 && ctx.Err() == nil {
+				continue
+			}
+
+			return domain.RawPlan{}, err
+		}
+
+		decodedPayload, retry, err := decodeMiniMaxResponse(resp)
+		if err != nil {
+			lastErr = err
+			if retry && attempt == 0 {
+				continue
+			}
+
+			return domain.RawPlan{}, err
+		}
+
+		payload = decodedPayload
+		lastErr = nil
+		break
+	}
+	if lastErr != nil {
+		return domain.RawPlan{}, lastErr
 	}
 
 	rawPlanJSON, err := extractTextContent(payload.Content)
@@ -126,6 +132,35 @@ func (p MiniMaxPlanner) Plan(ctx context.Context, query string, domainID string)
 	}
 
 	return DecodeRawPlanJSON([]byte(rawPlanJSON))
+}
+
+func decodeMiniMaxResponse(resp *http.Response) (miniMaxMessagesResponse, bool, error) {
+	defer resp.Body.Close()
+
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		body, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return miniMaxMessagesResponse{}, shouldRetryStatus(resp.StatusCode), fmt.Errorf("minimax request failed: status %d", resp.StatusCode)
+		}
+
+		trimmedBody := strings.TrimSpace(string(body))
+		if trimmedBody == "" {
+			return miniMaxMessagesResponse{}, shouldRetryStatus(resp.StatusCode), fmt.Errorf("minimax request failed: status %d", resp.StatusCode)
+		}
+
+		return miniMaxMessagesResponse{}, shouldRetryStatus(resp.StatusCode), fmt.Errorf("minimax request failed: status %d: %s", resp.StatusCode, trimmedBody)
+	}
+
+	var payload miniMaxMessagesResponse
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return miniMaxMessagesResponse{}, false, err
+	}
+
+	return payload, false, nil
+}
+
+func shouldRetryStatus(statusCode int) bool {
+	return statusCode >= http.StatusInternalServerError
 }
 
 func buildMiniMaxSystemPrompt() string {
@@ -141,6 +176,8 @@ func buildMiniMaxSystemPrompt() string {
 		`Use this JSON shape: {"query_mode":"","metrics":[],"dimensions":[],"detail_subject":"","select_fields":[],"filters":[{"field":"","operator":"","value":""}],"time_range":{"type":"","value":"","start":"","end":"","grain":""},"order_by":[{"field":"","direction":""}],"limit":0,"explanation":""}.`,
 		`Use only these operators in filters: "eq", "ne", "gt", "gte", "lt", "lte", "like".`,
 		`For the ride_hailing domain, use these exact business aliases when they apply: metric "取消率", dimension "城市", detail subject "待接驾订单".`,
+		`For detail_list queries, keep "select_fields" empty unless the user explicitly asks for columns.`,
+		`For waiting-pickup detail queries, the detail subject "待接驾订单" already implies waiting_pickup status, so only add narrowing filters such as "city_code" or "drivers.driver_name" when the question provides them.`,
 		`For relative time ranges, use "last_7_days" or "last_30_days". For trend grain, use "day", "week", or "month".`,
 		`Example question: 最近30天取消率最高的城市`,
 		`Example RawPlan: {"query_mode":"ranking","metrics":["取消率"],"dimensions":["城市"],"detail_subject":"","select_fields":[],"filters":[],"time_range":{"type":"relative","value":"last_30_days","start":"","end":"","grain":""},"order_by":[{"field":"取消率","direction":"desc"}],"limit":10,"explanation":"查询最近30天取消率最高的城市排行"}.`,
@@ -148,6 +185,12 @@ func buildMiniMaxSystemPrompt() string {
 		`Example RawPlan: {"query_mode":"aggregate_overview","metrics":["取消率"],"dimensions":[],"detail_subject":"","select_fields":[],"filters":[],"time_range":{"type":"relative","value":"last_30_days","start":"","end":"","grain":""},"order_by":[],"limit":10,"explanation":"查询最近30天取消率"}.`,
 		`Example question: 最近7天每天的取消率趋势`,
 		`Example RawPlan: {"query_mode":"trend","metrics":["取消率"],"dimensions":[],"detail_subject":"","select_fields":[],"filters":[],"time_range":{"type":"relative","value":"last_7_days","start":"","end":"","grain":"day"},"order_by":[],"limit":10,"explanation":"查询最近7天每天的取消率趋势"}.`,
+		`Example question: 最近7天上海待接驾订单明细`,
+		`Example RawPlan: {"query_mode":"detail_list","metrics":[],"dimensions":[],"detail_subject":"待接驾订单","select_fields":[],"filters":[{"field":"city_code","operator":"eq","value":"310000"}],"time_range":{"type":"relative","value":"last_7_days","start":"","end":"","grain":""},"order_by":[],"limit":10,"explanation":"查询最近7天上海的待接驾订单明细"}.`,
+		`Example question: 最近7天司机张三的待接驾订单明细`,
+		`Example RawPlan: {"query_mode":"detail_list","metrics":[],"dimensions":[],"detail_subject":"待接驾订单","select_fields":[],"filters":[{"field":"drivers.driver_name","operator":"eq","value":"张三"}],"time_range":{"type":"relative","value":"last_7_days","start":"","end":"","grain":""},"order_by":[],"limit":10,"explanation":"查询最近7天司机张三的待接驾订单明细"}.`,
+		`Example question: 最近7天待接驾订单明细`,
+		`Example RawPlan: {"query_mode":"detail_list","metrics":[],"dimensions":[],"detail_subject":"待接驾订单","select_fields":[],"filters":[],"time_range":{"type":"relative","value":"last_7_days","start":"","end":"","grain":""},"order_by":[],"limit":10,"explanation":"查询最近7天待接驾订单明细，但缺少城市或司机等收敛条件"}.`,
 		"Return JSON only.",
 	}, "\n")
 }

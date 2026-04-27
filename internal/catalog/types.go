@@ -14,7 +14,7 @@ type Catalog struct {
 	DetailViews map[string]DetailViewSpec
 	// Roles 保存按角色 ID 索引的角色策略定义。
 	Roles map[string]RolePolicy
-	// AliasesByDomain 保存各领域的人类可读别名映射。
+	// AliasesByDomain 保存各领域的自然语言别名映射。
 	AliasesByDomain map[string]AliasSet
 	// TablesByName 以表名索引物理表定义，供后续语义校验复用。
 	TablesByName map[string]TableSpec
@@ -120,6 +120,8 @@ type DetailViewSpec struct {
 	AllowedFilterFields []string `yaml:"allowed_filter_fields"`
 	// RequiredTimeField 是明细查询强制要求的时间字段。
 	RequiredTimeField string `yaml:"required_time_field"`
+	// PresetFilters 是命中该明细视图后必须附加的静态过滤条件。
+	PresetFilters []FilterSpec `yaml:"preset_filters"`
 	// DefaultSort 是默认排序规则。
 	DefaultSort SortSpec `yaml:"default_sort"`
 	// MaxLimit 是明细查询最大返回行数。
@@ -142,6 +144,16 @@ type SortSpec struct {
 	Field string `yaml:"field"`
 	// Direction 是排序方向，如 asc 或 desc。
 	Direction string `yaml:"direction"`
+}
+
+// FilterSpec 描述可配置的静态过滤条件。
+type FilterSpec struct {
+	// Field 是过滤字段，要求使用 table.column 形式或白名单短字段。
+	Field string `yaml:"field"`
+	// Operator 是过滤操作符，要求与运行时受控操作符集合一致。
+	Operator string `yaml:"operator"`
+	// Value 是过滤值。
+	Value string `yaml:"value"`
 }
 
 // RolePolicy 描述角色可执行的查询能力边界。
@@ -168,4 +180,6 @@ type AliasSet struct {
 	Dimensions map[string]string `yaml:"dimensions"`
 	// DetailViews 保存明细主题中文别名到明细视图 ID 的映射。
 	DetailViews map[string]string `yaml:"detail_views"`
+	// FilterValues 保存按字段划分的过滤值别名映射，例如城市名称到城市编码。
+	FilterValues map[string]map[string]string `yaml:"filter_values"`
 }

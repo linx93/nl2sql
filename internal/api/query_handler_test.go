@@ -65,6 +65,20 @@ func TestPostQueriesReturnsForbiddenForPermissionError(t *testing.T) {
 	}
 }
 
+func TestPostQueriesReturnsBadRequestForInvalidQueryError(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/nl2sql/queries", strings.NewReader(`{"query":"最近7天待接驾订单明细","domain":"ride_hailing"}`))
+	res := httptest.NewRecorder()
+
+	NewHandler(errorService{err: orchestrator.ErrInvalidQuery}).ServeHTTP(res, req)
+
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", res.Code)
+	}
+	if !strings.Contains(res.Body.String(), `"code":"INVALID_QUERY"`) {
+		t.Fatalf("expected INVALID_QUERY error code, got %s", res.Body.String())
+	}
+}
+
 func newHandlerWithFakeService() *Handler {
 	return NewHandler(fakeService{
 		response: orchestrator.Response{

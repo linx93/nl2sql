@@ -72,7 +72,12 @@ func executeQuery(ctx context.Context, db *sql.DB, query string, args []any) (fo
 			return formatter.QueryResult{}, fmt.Errorf("scan row: %w", err)
 		}
 
-		resultRows = append(resultRows, values)
+		normalized := make([]any, len(values))
+		for i := range values {
+			normalized[i] = normalizeScannedValue(values[i])
+		}
+
+		resultRows = append(resultRows, normalized)
 	}
 
 	if err := rows.Err(); err != nil {
@@ -85,3 +90,11 @@ func executeQuery(ctx context.Context, db *sql.DB, query string, args []any) (fo
 	}, nil
 }
 
+func normalizeScannedValue(value any) any {
+	bytes, ok := value.([]byte)
+	if !ok {
+		return value
+	}
+
+	return string(bytes)
+}

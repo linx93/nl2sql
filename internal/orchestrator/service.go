@@ -372,13 +372,16 @@ func cloneColumnSpecMap(src map[string]map[string]catalog.ColumnSpec) map[string
 }
 
 func normalizeServiceError(err error) error {
-	if errors.Is(err, ErrPermissionDenied) || errors.Is(err, ErrUnsupportedDomain) {
+	if errors.Is(err, ErrPermissionDenied) || errors.Is(err, ErrUnsupportedDomain) || errors.Is(err, ErrInvalidQuery) {
 		return err
 	}
 
 	message := err.Error()
 	if strings.Contains(message, "query mode not allowed") || strings.Contains(message, "permission denied") {
 		return fmt.Errorf("%w: %s", ErrPermissionDenied, message)
+	}
+	if strings.Contains(message, "narrowing filter") {
+		return fmt.Errorf("%w: %s", ErrInvalidQuery, message)
 	}
 
 	return err

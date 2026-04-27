@@ -35,6 +35,9 @@ func Validate(c Catalog) error {
 		if err := validateFieldRefs(c, []string{detailView.RequiredTimeField, detailView.DefaultSort.Field}); err != nil {
 			return err
 		}
+		if err := validatePresetFilters(c, detailView.PresetFilters); err != nil {
+			return err
+		}
 	}
 
 	for _, role := range c.Roles {
@@ -113,4 +116,13 @@ func splitFieldRef(field string) (string, string, bool) {
 	}
 
 	return table, column, true
+}
+
+func validatePresetFilters(c Catalog, filters []FilterSpec) error {
+	fields := make([]string, 0, len(filters))
+	for _, filter := range filters {
+		fields = append(fields, filter.Field)
+	}
+
+	return validateFieldRefs(c, fields)
 }
